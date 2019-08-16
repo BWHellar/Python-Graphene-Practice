@@ -3,10 +3,21 @@ import json
 import uuid
 from datetime import datetime
 
+
+class Post(graphene.ObjectType):
+    title = graphene.String()
+    content = graphene.String()
+
+
 class User(graphene.ObjectType):
     id = graphene.ID(default_value=str(uuid.uuid4()))
     username = graphene.String()
     created_at = graphene.DateTime(default_value=datetime.now())
+    avatar_url = graphene.String()
+
+    def resolve_avatar_url(self, info):
+        return 'https://cloudinary.com/{}/{}'.format(self.username,self.id)
+
 
 class Query(graphene.ObjectType):
     users = graphene.List(User, limit=graphene.Int())
@@ -36,23 +47,40 @@ class CreateUser(graphene.Mutation):
         user = User(username=username)
         return CreateUser(user=user)
 
+
+class CreatePost(graphene.Mutation):
+    post = graphene.Field(Post)
+
+    class Arguments:
+        title = graphene.String()
+        content = graphene.String()
+    
+    def mutate(self, info, title, content):
+        if info.context.get('is_anonymous'):
+            raise Exception('Not Authenticated')
+        post = Post(title=title, content=content)
+        return CreatePost(post=post)
+
 class Mutation(graphene.ObjectType):
     create_user = CreateUser.Field()
+    create_post = CreatePost.Field()
 
 
 schema = graphene.Schema(query=Query, mutation=Mutation)
 
 result = schema.execute(
     '''
-    query getUsersQuery ($limit: Int) {
-        users(limit: $limit) {
-            id
-            username
-            createdAt
+    {
+    users {
+        id
+        createdAt
+        username
+        avatarUrl
         }
     }
     ''',
-    variable_values={'limit': 1}
+    # context= { 'is_anonymous': True }
+    # variable_values={'limit': 1}
 )
 
 dictResult = dict(result.data.items())
